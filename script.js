@@ -353,7 +353,7 @@ async function loadAuthors() {
                         <div class="app-description-block">
                             <p class="app-desc-text">Это универсальный лаунчер-загрузчик модов в игру <strong>Tanks Blitz</strong>.</p>
                             <ul class="app-features-list-new">
-                                <li>Учитывает <strong>sDLS</strong> (Steam DLC System)</li>
+                                <li>Учитывает <strong>sDLS</strong></li>
                                 <li>Поддерживает обычные обновления</li>
                                 <li>Автоматические бэкапы</li>
                                 <li>Удобный каталог модификаций</li>
@@ -414,4 +414,5 @@ async function restoreMod(id, name) {
 }
 
 if(repairCloseBtn) repairCloseBtn.addEventListener('click', () => repairModal.classList.add('hidden'));
+
 const rb = document.getElementById('global-repair-btn'); if(rb) rb.addEventListener('click', openRepairModal);
