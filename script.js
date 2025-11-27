@@ -3,8 +3,10 @@ const REPO_AUTHORS_URL = 'https://rh-archive.ru/mods_files_github/authors.json';
 const REPO_BUY_URL = 'https://rh-archive.ru/mods_files_github/buy.json'; 
 const REPO_BASE_URL = 'https://rh-archive.ru/mods_files_github/';
 
+
 const contentArea = document.getElementById('content-area');
 const navItems = document.querySelectorAll('.nav-item');
+
 
 const modal = document.getElementById('progress-modal');
 const installView = document.getElementById('install-view');
@@ -17,9 +19,11 @@ const modalStatus = document.getElementById('modal-status');
 const modalTitle = document.getElementById('modal-title');
 const modalCloseBtn = document.getElementById('modal-close-btn');
 
+
 const repairModal = document.getElementById('repair-modal'); 
 const repairList = document.getElementById('repair-list');
 const repairCloseBtn = document.getElementById('repair-close-btn');
+
 
 const infoModal = document.getElementById('info-modal'); 
 const infoTitle = document.getElementById('info-modal-title');
@@ -27,10 +31,14 @@ const infoDesc = document.getElementById('info-modal-desc');
 const infoActionBtn = document.getElementById('info-modal-action');
 const infoCloseBtn = document.getElementById('info-close-btn');
 
+
 const splash = document.getElementById('splash-screen');
+
+// === OFFLINE LOGIC CONSTANTS ===
 const offlineScreen = document.getElementById('offline-screen');
 const btnRetry = document.getElementById('btn-retry-connect');
 const btnExitOffline = document.getElementById('btn-exit-offline');
+
 
 // Обновление
 const btnCheckUpdates = document.getElementById('btn-check-updates');
@@ -42,11 +50,13 @@ const btnStartUpdate = document.getElementById('btn-start-update');
 const btnSkipUpdate = document.getElementById('btn-skip-update');
 const toast = document.getElementById('toast-notification');
 
+
 let currentInstallMethod = 'auto'; 
 let globalModsList = []; 
 let globalBuyList = []; 
 let globalInstalledIds = [];
 let newUpdateUrl = "";
+
 
 document.addEventListener('DOMContentLoaded', () => {
     const savedColor = localStorage.getItem('accentColor');
@@ -66,7 +76,9 @@ document.addEventListener('DOMContentLoaded', () => {
     setInterval(checkPing, 5000);
 });
 
+
 window.addEventListener('pywebviewready', checkEnvironment);
+
 
 function showToast(msg) {
     if(!toast) return;
@@ -74,6 +86,7 @@ function showToast(msg) {
     toast.classList.remove('hidden');
     setTimeout(() => toast.classList.add('hidden'), 3000);
 }
+
 
 async function checkForUpdates(manual = false) {
     if (!window.pywebview) {
@@ -85,6 +98,7 @@ async function checkForUpdates(manual = false) {
         const icon = btnCheckUpdates.querySelector('span');
         icon.style.animation = "spin 1s linear infinite";
     }
+
 
     try {
         const res = await window.pywebview.api.check_for_updates();
@@ -108,7 +122,9 @@ async function checkForUpdates(manual = false) {
     }
 }
 
+
 if (btnCheckUpdates) btnCheckUpdates.addEventListener('click', () => checkForUpdates(true));
+
 
 if (btnStartUpdate) {
     btnStartUpdate.addEventListener('click', () => {
@@ -119,7 +135,9 @@ if (btnStartUpdate) {
     });
 }
 
+
 if (btnSkipUpdate) btnSkipUpdate.addEventListener('click', () => updateModal.classList.add('hidden'));
+
 
 async function checkPing() {
     const pingText = document.getElementById('ping-text');
@@ -141,6 +159,7 @@ async function checkPing() {
     }
 }
 
+
 function applyAccentColor(color) {
     const div = document.createElement('div');
     div.style.color = color;
@@ -155,6 +174,7 @@ function applyAccentColor(color) {
         document.documentElement.style.setProperty('--md-sys-color-on-primary', '#1e1e1e');
     }
 }
+
 
 function renderSettings() {
     let col = getComputedStyle(document.documentElement).getPropertyValue('--md-sys-color-primary').trim();
@@ -207,13 +227,19 @@ function renderSettings() {
     });
 }
 
+
 window.resetTheme = function() { applyAccentColor('#d0bcff'); localStorage.removeItem('accentColor'); renderSettings(); }
+
 
 function checkEnvironment() {
     const repairBtn = document.getElementById('global-repair-btn');
     if (window.pywebview && repairBtn) repairBtn.classList.remove('hidden');
-    checkForUpdates(false); 
+    checkForUpdates(false);
+    
+    // === ДОБАВЛЕН ВЫЗОВ ПРОВЕРКИ IP ===
+    checkGeoRestriction();
 }
+
 
 navItems.forEach(item => {
     item.addEventListener('click', () => {
@@ -222,6 +248,7 @@ navItems.forEach(item => {
         handleTabChange(item.getAttribute('data-tab'));
     });
 });
+
 
 function handleTabChange(tab) {
     contentArea.classList.add('fade-out');
@@ -235,15 +262,17 @@ function handleTabChange(tab) {
     }, 250);
 }
 
+
 async function loadMods() {
-    // Hide splash if present (logic moved here or kept in finally)
-
+    // === OFFLINE SCREEN LOGIC START ===
     if(offlineScreen) offlineScreen.classList.add('hidden');
-
-    // If splash is NOT visible, show spinner in content. If splash IS visible, let it cover until load.
+    
+    // Если сплэш еще виден, не показываем спиннер в контенте, сплэш перекроет
+    // Если сплэш ушел (retry), показываем спиннер
     if (!splash || splash.style.display === 'none') {
          contentArea.innerHTML = '<div class="loader-spinner"><div class="spinner"></div><p>Обновление данных...</p></div>';
     }
+    // === END ===
 
     try {
         // Add timeout for fetch
@@ -254,22 +283,19 @@ async function loadMods() {
             fetch(REPO_JSON_URL, { signal: controller.signal }).catch(e => null),
             fetch(REPO_BUY_URL, { signal: controller.signal }).catch(() => ({ json: () => [] }))
         ]);
-
+        
         clearTimeout(timeoutId);
 
-        if (!modsResp || !modsResp.ok) throw new Error("Сервер недоступен");
-
+        if (!modsResp || !modsResp.ok) throw new Error("Не удалось загрузить каталог");
         globalModsList = await modsResp.json(); 
         globalBuyList = await buyResp.json();
         globalInstalledIds = [];
-
         if (window.pywebview) {
             try { globalInstalledIds = await window.pywebview.api.check_installed_mods(globalModsList); } catch (e) {}
         }
-
         renderMods(globalModsList, globalInstalledIds, globalBuyList);
-
-        // Success - hide splash
+        
+        // Hide splash on success
         if(splash) {
             splash.style.opacity = '0';
             setTimeout(() => splash.style.display = 'none', 800);
@@ -277,14 +303,16 @@ async function loadMods() {
 
     } catch (e) { 
         console.error("Network error:", e);
+        // === SHOW OFFLINE SCREEN ===
         if (offlineScreen) {
             offlineScreen.classList.remove('hidden');
-            if(splash) splash.style.display = 'none'; // Hide splash to show error
+            if(splash) splash.style.display = 'none'; 
         } else {
-            contentArea.innerHTML = `<div class="empty-state"><p>Ошибка сети: ${e.message}</p></div>`; 
+            contentArea.innerHTML = `<div class="empty-state"><p>Ошибка загрузки: ${e.message}</p></div>`; 
         }
     }
 }
+
 
 function renderMods(mods, installedIds, buyList) {
     contentArea.innerHTML = '';
@@ -302,6 +330,9 @@ function renderMods(mods, installedIds, buyList) {
         if (buyInfo) {
             if (buyInfo.status === 'preorder') {
                 btnText = 'Предзаказ'; btnIcon = 'schedule'; onClickAction = `openInfoModal('preorder', '${mod.id}')`;
+            } else if (buyInfo.status === 'BT') {
+                // === ЛОГИКА BT ===
+                btnText = 'Временно недоступен'; btnIcon = 'schedule'; onClickAction = `openInfoModal('testing', '${mod.id}')`;
             } else {
                 btnText = 'Купить'; btnIcon = 'shopping_cart'; onClickAction = `openInfoModal('paid', '${mod.id}')`;
             }
@@ -324,15 +355,33 @@ function renderMods(mods, installedIds, buyList) {
     });
 }
 
+
 function openInfoModal(type, modId) {
     const buyItem = globalBuyList.find(b => b.id === modId);
     const modItem = globalModsList.find(m => m.id === modId);
     if (!buyItem || !modItem) return;
     infoModal.classList.remove('hidden');
-    infoActionBtn.className = 'modal-action-btn'; 
-    let statusTitle = type === 'preorder' ? 'Предзаказ' : 'Платный контент';
-    let btnText = type === 'preorder' ? 'ЗАКАЗАТЬ' : 'КУПИТЬ';
-    let btnIcon = type === 'preorder' ? 'schedule' : 'shopping_cart';
+
+    let statusTitle, btnText, btnIcon, showButton;
+
+    if (type === 'preorder') {
+        statusTitle = 'Предзаказ';
+        btnText = 'ЗАКАЗАТЬ';
+        btnIcon = 'schedule';
+        showButton = true;
+    } else if (type === 'testing') {
+        // === ЛОГИКА BT ===
+        statusTitle = 'В процессе....';
+        btnText = '';
+        btnIcon = '';
+        showButton = false;
+    } else {
+        statusTitle = 'Платный контент';
+        btnText = 'КУПИТЬ';
+        btnIcon = 'shopping_cart';
+        showButton = true;
+    }
+
     infoTitle.innerText = statusTitle;
     infoDesc.innerHTML = `
         <div class="info-row"><span class="info-label">Мод:</span><span class="info-value">${modItem.name}</span></div>
@@ -341,11 +390,19 @@ function openInfoModal(type, modId) {
         <p class="info-description">${buyItem.desc || "Описание недоступно."}</p>
         <div class="info-price-tag">${buyItem.price || "Цена договорная"}</div>
     `;
-    infoActionBtn.innerHTML = `${btnText} <span class="material-symbols-outlined">${btnIcon}</span>`;
-    infoActionBtn.onclick = () => { if (buyItem.link) window.open(buyItem.link, '_blank'); };
+
+    if (showButton) {
+        infoActionBtn.style.display = 'flex';
+        infoActionBtn.innerHTML = `${btnText} <span class="material-symbols-outlined">${btnIcon}</span>`;
+        infoActionBtn.onclick = () => { if (buyItem.link) window.open(buyItem.link, '_blank'); };
+    } else {
+        infoActionBtn.style.display = 'none';
+    }
 }
 
+
 if(infoCloseBtn) infoCloseBtn.addEventListener('click', () => infoModal.classList.add('hidden'));
+
 
 function renderInstallMethods() {
     contentArea.innerHTML = `
@@ -364,6 +421,7 @@ function renderInstallMethods() {
     tS.addEventListener('change', ()=>{if(tS.checked){tA.checked=false;tN.checked=false;upd('sdls');}else tS.checked=true;});
     tN.addEventListener('change', ()=>{if(tN.checked){tA.checked=false;tS.checked=false;upd('no_sdls');}else tN.checked=true;});
 }
+
 
 async function loadAuthors() {
     contentArea.innerHTML = `<div class="loader-spinner"><div class="spinner"></div></div>`;
@@ -392,6 +450,7 @@ async function loadAuthors() {
     } catch (error) { contentArea.innerHTML = `<p style="color:#ff5252;">Ошибка авторов.</p>`; }
 }
 
+
 function startInstallProcess(id, name, url) {
     if(!window.pywebview) return;
     if(url && !url.startsWith('http')) url = REPO_BASE_URL + url;
@@ -401,14 +460,17 @@ function startInstallProcess(id, name, url) {
     window.pywebview.api.install_mod(id, url, currentInstallMethod);
 }
 
+
 if(modalCloseBtn) modalCloseBtn.addEventListener('click', () => { if(window.pywebview) window.pywebview.api.cancel_install(); closeModal(); });
 function closeModal() { modal.classList.add('hidden'); }
+
 
 window.updateRealProgress = (p, t) => { progressBar.style.width = p + "%"; progressPercent.innerText = p + "%"; modalStatus.innerText = t; }
 window.finishInstall = (s, m) => {
     if(s) { installView.classList.add('view-hidden'); successView.classList.remove('view-hidden'); setTimeout(() => { closeModal(); loadMods(); }, 2000); }
     else { if(m==="Canceled"){closeModal();} else { installView.classList.add('view-hidden'); errorView.classList.remove('view-hidden'); errorMessage.innerText = m; setTimeout(closeModal, 3000); } }
 }
+
 
 function openRepairModal() {
     const installedMods = globalModsList.filter(m => globalInstalledIds.includes(m.id));
@@ -424,6 +486,7 @@ function openRepairModal() {
     repairModal.classList.remove('hidden');
 }
 
+
 async function restoreMod(id, name) {
     repairModal.classList.add('hidden');
     installView.classList.remove('view-hidden'); successView.classList.add('view-hidden'); errorView.classList.add('view-hidden');
@@ -433,9 +496,45 @@ async function restoreMod(id, name) {
     if (res.success) finishInstall(true, res.message); else finishInstall(false, res.message);
 }
 
+
 if(repairCloseBtn) repairCloseBtn.addEventListener('click', () => repairModal.classList.add('hidden'));
 const rb = document.getElementById('global-repair-btn'); if(rb) rb.addEventListener('click', openRepairModal);
 
+
+// === GEO RESTRICTION LOGIC ===
+const geoModal = document.getElementById('geo-modal');
+const geoExitBtn = document.getElementById('geo-exit-btn');
+
+
+async function checkGeoRestriction() {
+    if (!window.pywebview || !window.pywebview.api || !window.pywebview.api.check_connection_status) {
+        return;
+    }
+    try {
+        const res = await window.pywebview.api.check_connection_status();
+        // { status: "blocked", country: "UA" }
+        if (res && res.status === 'blocked') {
+            if (geoModal) {
+                geoModal.classList.remove('hidden');
+            }
+        }
+    } catch (e) {
+        console.warn('Geo check failed', e);
+    }
+}
+
+
+if (geoExitBtn) {
+    geoExitBtn.addEventListener('click', () => {
+        if (window.pywebview && window.pywebview.api && window.pywebview.api.close) {
+            window.pywebview.api.close();
+        } else if (geoModal) {
+            geoModal.classList.add('hidden');
+        }
+    });
+}
+
+// === OFFLINE SCREEN LISTENERS ===
 if (btnRetry) {
     btnRetry.addEventListener('click', () => {
         const icon = btnRetry.querySelector('span');
