@@ -34,11 +34,6 @@ const infoCloseBtn = document.getElementById('info-close-btn');
 
 const splash = document.getElementById('splash-screen');
 
-// === OFFLINE LOGIC CONSTANTS ===
-const offlineScreen = document.getElementById('offline-screen');
-const btnRetry = document.getElementById('btn-retry-connect');
-const btnExitOffline = document.getElementById('btn-exit-offline');
-
 
 // Обновление
 const btnCheckUpdates = document.getElementById('btn-check-updates');
@@ -264,28 +259,11 @@ function handleTabChange(tab) {
 
 
 async function loadMods() {
-    // === OFFLINE SCREEN LOGIC START ===
-    if(offlineScreen) offlineScreen.classList.add('hidden');
-    
-    // Если сплэш еще виден, не показываем спиннер в контенте, сплэш перекроет
-    // Если сплэш ушел (retry), показываем спиннер
-    if (!splash || splash.style.display === 'none') {
-         contentArea.innerHTML = '<div class="loader-spinner"><div class="spinner"></div><p>Обновление данных...</p></div>';
-    }
-    // === END ===
-
     try {
-        // Add timeout for fetch
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 10000);
-
         const [modsResp, buyResp] = await Promise.all([
-            fetch(REPO_JSON_URL, { signal: controller.signal }).catch(e => null),
-            fetch(REPO_BUY_URL, { signal: controller.signal }).catch(() => ({ json: () => [] }))
+            fetch(REPO_JSON_URL).catch(e => null),
+            fetch(REPO_BUY_URL).catch(() => ({ json: () => [] }))
         ]);
-        
-        clearTimeout(timeoutId);
-
         if (!modsResp || !modsResp.ok) throw new Error("Не удалось загрузить каталог");
         globalModsList = await modsResp.json(); 
         globalBuyList = await buyResp.json();
@@ -294,22 +272,10 @@ async function loadMods() {
             try { globalInstalledIds = await window.pywebview.api.check_installed_mods(globalModsList); } catch (e) {}
         }
         renderMods(globalModsList, globalInstalledIds, globalBuyList);
-        
-        // Hide splash on success
-        if(splash) {
-            splash.style.opacity = '0';
-            setTimeout(() => splash.style.display = 'none', 800);
-        }
-
     } catch (e) { 
-        console.error("Network error:", e);
-        // === SHOW OFFLINE SCREEN ===
-        if (offlineScreen) {
-            offlineScreen.classList.remove('hidden');
-            if(splash) splash.style.display = 'none'; 
-        } else {
-            contentArea.innerHTML = `<div class="empty-state"><p>Ошибка загрузки: ${e.message}</p></div>`; 
-        }
+        contentArea.innerHTML = `<div class="empty-state"><p>Ошибка загрузки: ${e.message}</p></div>`; 
+    } finally {
+        setTimeout(() => { if(splash) splash.classList.add('fade-out'); }, 500);
     }
 }
 
@@ -500,11 +466,9 @@ async function restoreMod(id, name) {
 if(repairCloseBtn) repairCloseBtn.addEventListener('click', () => repairModal.classList.add('hidden'));
 const rb = document.getElementById('global-repair-btn'); if(rb) rb.addEventListener('click', openRepairModal);
 
-
 // === GEO RESTRICTION LOGIC ===
 const geoModal = document.getElementById('geo-modal');
 const geoExitBtn = document.getElementById('geo-exit-btn');
-
 
 async function checkGeoRestriction() {
     if (!window.pywebview || !window.pywebview.api || !window.pywebview.api.check_connection_status) {
@@ -523,7 +487,6 @@ async function checkGeoRestriction() {
     }
 }
 
-
 if (geoExitBtn) {
     geoExitBtn.addEventListener('click', () => {
         if (window.pywebview && window.pywebview.api && window.pywebview.api.close) {
@@ -531,24 +494,5 @@ if (geoExitBtn) {
         } else if (geoModal) {
             geoModal.classList.add('hidden');
         }
-    });
-}
-
-// === OFFLINE SCREEN LISTENERS ===
-if (btnRetry) {
-    btnRetry.addEventListener('click', () => {
-        const icon = btnRetry.querySelector('span');
-        if(icon) icon.style.animation = "spin 1s linear infinite";
-        setTimeout(() => {
-            loadMods().then(() => {
-                if(icon) icon.style.animation = "none";
-            });
-        }, 500);
-    });
-}
-
-if (btnExitOffline) {
-    btnExitOffline.addEventListener('click', () => {
-        if (window.pywebview) window.pywebview.api.close();
     });
 }
